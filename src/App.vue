@@ -5,6 +5,7 @@ import TemperatureChart from './components/TemperatureChart.vue'
 import ForecastGrid from './components/ForecastGrid.vue'
 import AirQualityWidget from './components/AirQualityWidget.vue'
 import UvWidget from './components/UvWidget.vue'
+import CountryCatalog from './components/CountryCatalog.vue'
 
 // --- ETAT (STATE) ---
 const city = ref('')
@@ -19,6 +20,7 @@ const recentSearches = ref([])
 // Nouveautés Premium
 const unit = ref('metric')
 const isMobileMenuOpen = ref(false)
+const currentView = ref('dashboard') // 'dashboard' or 'catalog'
 
 // --- TA CLÉ API ICI (sécurisée dans .env.local) ---
 const API_KEY = import.meta.env.VITE_OPENWEATHER_API_KEY
@@ -129,6 +131,13 @@ const getWeatherByCity = () => {
 
 const searchRecent = (recentCity) => {
   city.value = recentCity;
+  currentView.value = 'dashboard';
+  getWeatherByCity();
+}
+
+const selectFromCatalog = (cityName) => {
+  city.value = cityName;
+  currentView.value = 'dashboard';
   getWeatherByCity();
 }
 
@@ -190,6 +199,23 @@ const dailyForecast = computed(() => {
         </button>
       </div>
 
+      <nav class="sidebar-nav">
+        <button 
+          class="nav-item" 
+          :class="{ active: currentView === 'dashboard' }"
+          @click="currentView = 'dashboard'; isMobileMenuOpen = false"
+        >
+          <i class="ri-dashboard-line"></i> Dashboard
+        </button>
+        <button 
+          class="nav-item" 
+          :class="{ active: currentView === 'catalog' }"
+          @click="currentView = 'catalog'; isMobileMenuOpen = false"
+        >
+          <i class="ri-global-line"></i> Catalogue
+        </button>
+      </nav>
+
       <div class="search-box">
         <input 
           v-model="city" 
@@ -225,41 +251,48 @@ const dailyForecast = computed(() => {
       
       <!-- Toast pour les erreurs -->
       <transition name="toast">
-        <div v-if="error" class="error-toast">
+        <div v-if="error && currentView === 'dashboard'" class="error-toast">
           <i class="ri-error-warning-fill"></i> {{ error }}
         </div>
       </transition>
 
-      <!-- Skeletons (Loading state) -->
-      <div v-if="loading" class="skeleton-dashboard">
-        <div class="skeleton skeleton-hero"></div>
-        <div class="skeleton-row">
-           <div class="skeleton skeleton-widget" v-for="i in 4" :key="i"></div>
-        </div>
+      <!-- Vue Catalogue (toujours accessible, peu importe loading) -->
+      <div v-if="currentView === 'catalog'" class="dashboard-data">
+        <CountryCatalog :apiKey="API_KEY" :unit="unit" @select-city="selectFromCatalog" />
       </div>
 
-      <!-- Données Météo -->
-      <div v-else-if="weather" class="dashboard-data">
-        <!-- Haut: Météo Principale -->
-        <MainDashboard :weather="weather" />
-        
-        <!-- Milieu/Bas : Layout 2 colonnes sur Desktop -->
-        <div class="bottom-grid">
-          <div class="left-col">
-            <TemperatureChart v-if="forecast.length > 0" :forecast="forecast" />
-            <ForecastGrid v-if="dailyForecast.length > 0" :forecast="dailyForecast" />
-          </div>
-          <div class="right-col premium-widgets">
-            <AirQualityWidget v-if="aqiData" :aqiData="aqiData" />
-            <UvWidget v-if="uvIndex !== null" :uvIndex="uvIndex" />
+      <!-- Vue Dashboard -->
+      <template v-else>
+        <!-- Skeletons (Loading state) -->
+        <div v-if="loading" class="skeleton-dashboard">
+          <div class="skeleton skeleton-hero"></div>
+          <div class="skeleton-row">
+            <div class="skeleton skeleton-widget" v-for="i in 4" :key="i"></div>
           </div>
         </div>
-      </div>
 
-      <div v-else class="waiting-state">
-        <i class="ri-dashboard-3-line"></i>
-        <p>Dashboard en attente de données...</p>
-      </div>
+        <div v-else-if="weather" class="dashboard-data">
+          <!-- Haut: Météo Principale -->
+          <MainDashboard :weather="weather" />
+          
+          <!-- Milieu/Bas : Layout 2 colonnes sur Desktop -->
+          <div class="bottom-grid">
+            <div class="left-col">
+              <TemperatureChart v-if="forecast.length > 0" :forecast="forecast" />
+              <ForecastGrid v-if="dailyForecast.length > 0" :forecast="dailyForecast" />
+            </div>
+            <div class="right-col premium-widgets">
+              <AirQualityWidget v-if="aqiData" :aqiData="aqiData" />
+              <UvWidget v-if="uvIndex !== null" :uvIndex="uvIndex" />
+            </div>
+          </div>
+        </div>
+
+        <div v-else class="waiting-state">
+          <i class="ri-dashboard-3-line"></i>
+          <p>Dashboard en attente de données...</p>
+        </div>
+      </template>
 
     </main>
   </div>
@@ -339,6 +372,55 @@ const dailyForecast = computed(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 40px;
+}
+
+/* --- SIDEBAR NAV --- */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 40px;
+}
+
+.nav-item {
+  width: 100% !important;
+  height: 50px !important;
+  background: transparent;
+  border-radius: 15px !important;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start !important;
+  padding: 0 20px;
+  gap: 15px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.7;
+  transition: all 0.3s;
+  flex-shrink: 1 !important;
+}
+
+.nav-item i {
+  font-size: 1.3rem;
+  color: #4facfe;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+  opacity: 1;
+  transform: translateX(5px) !important;
+  scale: 1 !important;
+}
+
+.nav-item.active {
+  background: #4facfe;
+  color: white;
+  opacity: 1;
+  box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
+}
+
+.nav-item.active i {
+  color: white;
 }
 
 .logo {
